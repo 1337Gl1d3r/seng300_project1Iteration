@@ -80,14 +80,23 @@ public class Scanner {
 		
 		File dir = new File(args[0]);		// create file object for directory
 		File[] filesArr = dir.listFiles();		// gets list of files in directory
+		if (filesArr == null) {
+			System.out.println("[Scanner]:\tInvalid directory or path");
+			System.exit(0);
+		}
 		debug(Arrays.toString(filesArr));
 		
 		List<File> jFiles = new ArrayList<File>();		// creates ArrayList to add java files to get parsed from directory
 		// get list of just .java files
-		for (int i = 0; i < filesArr.length; i++) {
-			boolean isJava = (filesArr[i].toString()).contains(".java");		// check if a java file
-			if (isJava) {
-				jFiles.add(filesArr[i]);		// add to list if java file
+		if (filesArr.length <= 0) {
+			System.out.println("[Scanner]:\tNo java files in the specified directory.");
+			System.exit(0);
+		} else {
+			for (int i = 0; i < filesArr.length; i++) {
+				boolean isJava = (filesArr[i].toString()).contains(".java");		// check if a java file
+				if (isJava) {
+					jFiles.add(filesArr[i]);		// add to list if java file
+				}
 			}
 		}
 		debug("Number of java files: " +jFiles.size());
