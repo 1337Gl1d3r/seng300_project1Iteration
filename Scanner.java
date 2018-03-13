@@ -25,14 +25,17 @@ import java.lang.StringBuilder;
 /** 
  *	Main driver class for the scanning functionality 
  */
-public class Scanner {	
+public class Scanner {
+	private static boolean debugging = true;
+	
 	/** 
 	 * Prints easily read debug statements
 	 * 
 	 * @param msg The debug msg to print
 	 */
 	public static void debug(String msg) {
-		System.out.println("[DEBUG]:\t " + msg);
+		if (debugging) 
+			System.out.println("[DEBUG]:\t " + msg);
 	}
 	
 	/**
@@ -60,6 +63,7 @@ public class Scanner {
 		StringBuilder sb = new StringBuilder();
 		for (String s : fileString) {
 			sb.append(s);		// add each element from array to stringbuilder sb
+			sb.append('\n');
 		}
 		String result = sb.toString();		// combines all the appended strings together
 		r.close();		// close BufferedReader
@@ -102,37 +106,38 @@ public class Scanner {
 		debug("Number of java files: " +jFiles.size());
 		debug(Arrays.toString(jFiles.toArray()));
 		
-		ASTParser parser = ASTParser.newParser(AST.JLS8);
+		
 		for (int i = 0; i < jFiles.size(); i++) {
 			File file = jFiles.get(i);
 			String fString = convertToString(file);
-			debug(fString);
-			
+			ASTParser parser = ASTParser.newParser(AST.JLS8);
 			parser.setSource(fString.toCharArray());	
 			parser.setKind(ASTParser.K_COMPILATION_UNIT);
 			CompilationUnit cu = (CompilationUnit) parser.createAST(null);
-			//****************************************************************
-			cu.accept(new ASTVisitor() {
-				 
-				Set names = new HashSet();
-	 
+			cu.accept(new ASTVisitor () {
+				Set names = new HashSet();		// create abstract hashset for names of variables
+				
+				public boolean visit(SimpleName node) {
+					if (this.names.contains(node.getIdentifier())) {
+						System.out.println("Usage of " + node + " at line " + cu.getLineNumber(node.getStartPosition()));
+					}
+					return false;
+				}
+				
 				public boolean visit(VariableDeclarationFragment node) {
 					SimpleName name = node.getName();
 					this.names.add(name.getIdentifier());
-					System.out.println("Declaration of '" + name + "' at line"
-							+ cu.getLineNumber(name.getStartPosition()));
-					return false; // do not continue 
-				}
-	 
-				public boolean visit(SimpleName node) {
-					if (this.names.contains(node.getIdentifier())) {
-						System.out.println("Usage of '" + node + "' at line "
-								+ cu.getLineNumber(node.getStartPosition()));
-					}
-					return true;
+					int lineNumber = cu.getLineNumber(name.getStartPosition());
+					
+					System.out.println("Name: " + name.toString());
+					System.out.println("Line: " + lineNumber);
+					System.out.println("---------------------------------------");
+					
+					return false;
 				}
 			});
-			//****************************************************************
+			
+			
 		}
 	}
 }
