@@ -17,7 +17,7 @@ import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.*;
-import java.lang.Class;
+import org.eclipse.jdt.core.IField;
 import java.util.HashSet;
 import java.util.Set;
 import java.lang.StringBuilder;
@@ -26,7 +26,9 @@ import java.lang.StringBuilder;
  *	Main driver class for the scanning functionality 
  */
 public class Scanner {
-	private static boolean debugging = true;
+	private static boolean debugging = false;
+	private static HashMap<String, Integer> countDecs = new HashMap<String, Integer>();		// create hashmap to hold int count of each declaration
+	private static HashMap<String, Integer> countRefs = new HashMap<String, Integer>();		// create hashmap to hold int count of each reference
 	
 	/** 
 	 * Prints easily read debug statements
@@ -43,6 +45,34 @@ public class Scanner {
 	 */
 	public static void usage() {
 		System.out.println("Usage:\tjava Scanner <path to directory> <java type of interest>");
+	} 
+	
+	/**
+	 * Will check the string value provided and either increment the count of the existing type or 
+	 * add the the hashmap the new found type and set its count to 1
+	 * 
+	 * @param key The hashmap key to check for
+	 * @param map The flag for which hashmap to adjust for (0 -> countDec, 1 -> countRefs)
+	 */
+	public static void countIt(String key, int map) {
+		Integer v = new Integer(1);
+		if (map == 0) {
+			if ((v = countDecs.get(key)) != null) {		// the key exist, so increment its value 
+				debug("Incrementing " + key);
+				countDecs.replace(key, v+1);
+			} else {									// key doesn't exist, so add it
+				debug("Adding " + key);
+				countDecs.put(key, new Integer(1));
+			}
+		} else { 
+			if ((v = countRefs.get(key)) != null) {		// the key exist, so increment its value 
+				debug("Incrementing " + key);
+				countRefs.replace(key, v+1);
+			} else {									// key doesn't exist, so add it
+				debug("Adding " + key);
+				countRefs.put(key, new Integer(1));
+			}
+		}
 	}
 	
 	/**
@@ -105,70 +135,98 @@ public class Scanner {
 		}
 		debug("Number of java files: " +jFiles.size());
 		debug(Arrays.toString(jFiles.toArray()));
-		HashMap<String, Integer> countMap = new HashMap<String, Integer>();		// create hashmap to hold int count of each simple map
 		String typeToScan = args[1];
 		debug("Scan for: \'" +  typeToScan + "\'");
 		for (int i = 0; i < jFiles.size(); i++) {
 			File file = jFiles.get(i);
+			debug("--------------------------------------------------------------------------------------");
+			debug("Scanning file: " + file.getName().toString());
+			debug("--------------------------------------------------------------------------------------");
 			String fString = convertToString(file);		// get file as string
 			ASTParser parser = ASTParser.newParser(AST.JLS8);		// set parser type to JLS8 and create
 			parser.setSource(fString.toCharArray());		// parse source the file as a char array
 			parser.setKind(ASTParser.K_COMPILATION_UNIT);
-			parser.setResolveBindings(true);
+			parser.setResolveBindings(true);		// Make is so compiler provides binding info for AST nodes created
+			parser.setBindingsRecovery(true);		// Ask compiler to perform binding recovery
+			parser.setEnvironment(null, null, null, true);		// Using .java files only (ie. ICompilationUnit) so need environment setup b/c no IJavaProject
+			parser.setUnitName(""); 	// empty string because "file" is a char array fed to setSource method
 			CompilationUnit cu = (CompilationUnit) parser.createAST(null);		// create file compilation unit
 			cu.accept(new ASTVisitor () {
-				Set names = new HashSet();		// create abstract hashset for names of variables
-				
-				public boolean visit(SimpleName node) {
-					if (this.names.contains(node.getIdentifier())) {
-						System.out.println("FullyQualifiedName: " + node.getFullyQualifiedName());
-						Integer cCnt = countMap.get(node.getIdentifier());		// get the current value for count
-						countMap.put(node.getIdentifier(), cCnt+1);		// increment current counter
-					}
-					return false;
-				}
-				
-				
-				public boolean visit(QualifiedName node) {
-					System.out.println("QualifiedName: " + node);
-					return true;
-				}
-				
-				public boolean visit(QualifiedType node) {
-					System.out.println("QualifiedType: " + node);
-					return true;
-				}
-				
+				/** Keep track of the type declaration for our classes */
 				public boolean visit(TypeDeclaration node) {
-					System.out.println(node.getName().getFullyQualifiedName());
+					String s = node.resolveBinding().getName().toString();		// get name(s) of class(es)
+					countIt(s, 0);		// incorporate to hashmap
 					return true;
 				}
 				
-				public boolean visit(FieldDeclaration node) {
-					System.out.println("FieldDeclaration: " + node.getType().toString());
+				/** Tracks object references in constructor statements */
+				public boolean visit(FieldAccess node) {
+					try {
+						ITypeBinding it = node.getName().resolveTypeBinding();
+						String fieldString = it.getQualifiedName();
+						countIt(fieldString, 1);
+					} catch (NullPointerException e) {
+						// do nothing
+					}
 					return true;
 				}
 				
-				/*
-				public boolean visit(SimpleType node) {
-					System.out.println("SimpleType: " + node.getName().getFullyQualifiedName());
+				/** Keep track of method references and their parameter references */
+				public boolean visit(MethodDeclaration node) {
+					// handle the method return value
+					Type t = null;
+					try {
+						t = node.getReturnType2();
+						String tb = t.resolveBinding().getQualifiedName(); 
+						if (!tb.equals("void")) {
+							debug("Method " + node.getName().toString() + " return type references " + tb);
+							countIt(tb, 1);		// incorporate into hashmap
+						}
+					} catch (NullPointerException e) {
+						// do nothing
+					}
+					
+					// handle the method parameters 
+					for (Object p : node.parameters()) {
+						VariableDeclaration vDec = (VariableDeclaration) p;
+						ITypeBinding iBind = vDec.resolveBinding().getType();
+						String pString = iBind.getQualifiedName();
+						countIt(pString, 1);
+					}
+					
+					
 					return true;
 				}
-				*/
-				/*
+			
 				public boolean visit(VariableDeclarationFragment node) {
+					String result = "";
+					IVariableBinding b = node.resolveBinding();
+					ITypeBinding t = b.getType();
+					String n = t.getQualifiedName();
 					SimpleName name = node.getName();		// get the simple name
-					this.names.add(name.getIdentifier());		// add to names list
-					countMap.put(name.getIdentifier(), new Integer(1));		// create new hashmap entry for new variable declaration
-					int lineNumber = cu.getLineNumber(name.getStartPosition());		
-					debug("Name: \'" + name.toString() + "\' at line: " + lineNumber);
+					if (n.equals("enum")) {
+						debug("enum found...");	
+						String[] fNameOnly = file.getName().split(".java");		// take class name to format properly
+						result = fNameOnly[0] + "." + name;
+					} else {
+						debug("found on " + cu.getLineNumber(name.getStartPosition()));
+						debug("Adding: " + n);
+						result = n;
+					}
+					countIt(result, 1);		// incorporate to hashmap
 					return false;
 				}
-				*/
+				
 			});
 		}
 		// output answer in proper format
-		Integer f = countMap.get(typeToScan);
-		
+		Integer f = countDecs.get(typeToScan);
+		Integer finalDecs = countDecs.get(typeToScan);
+		Integer finalRefs = countRefs.get(typeToScan);
+		if (finalDecs == null)
+			finalDecs = new Integer(0);
+		if (finalRefs == null)
+			finalRefs = new Integer(0);
+		System.out.println(typeToScan + ". Declarations found: " + finalDecs + "; References Found: " + finalRefs + ".");
 	}
 }
