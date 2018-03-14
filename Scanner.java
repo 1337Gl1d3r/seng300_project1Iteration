@@ -105,39 +105,70 @@ public class Scanner {
 		}
 		debug("Number of java files: " +jFiles.size());
 		debug(Arrays.toString(jFiles.toArray()));
-		
-		
+		HashMap<String, Integer> countMap = new HashMap<String, Integer>();		// create hashmap to hold int count of each simple map
+		String typeToScan = args[1];
+		debug("Scan for: \'" +  typeToScan + "\'");
 		for (int i = 0; i < jFiles.size(); i++) {
 			File file = jFiles.get(i);
-			String fString = convertToString(file);
-			ASTParser parser = ASTParser.newParser(AST.JLS8);
-			parser.setSource(fString.toCharArray());	
+			String fString = convertToString(file);		// get file as string
+			ASTParser parser = ASTParser.newParser(AST.JLS8);		// set parser type to JLS8 and create
+			parser.setSource(fString.toCharArray());		// parse source the file as a char array
 			parser.setKind(ASTParser.K_COMPILATION_UNIT);
-			CompilationUnit cu = (CompilationUnit) parser.createAST(null);
+			parser.setResolveBindings(true);
+			CompilationUnit cu = (CompilationUnit) parser.createAST(null);		// create file compilation unit
 			cu.accept(new ASTVisitor () {
 				Set names = new HashSet();		// create abstract hashset for names of variables
 				
 				public boolean visit(SimpleName node) {
 					if (this.names.contains(node.getIdentifier())) {
-						System.out.println("Usage of " + node + " at line " + cu.getLineNumber(node.getStartPosition()));
+						System.out.println("FullyQualifiedName: " + node.getFullyQualifiedName());
+						Integer cCnt = countMap.get(node.getIdentifier());		// get the current value for count
+						countMap.put(node.getIdentifier(), cCnt+1);		// increment current counter
 					}
 					return false;
 				}
 				
+				
+				public boolean visit(QualifiedName node) {
+					System.out.println("QualifiedName: " + node);
+					return true;
+				}
+				
+				public boolean visit(QualifiedType node) {
+					System.out.println("QualifiedType: " + node);
+					return true;
+				}
+				
+				public boolean visit(TypeDeclaration node) {
+					System.out.println(node.getName().getFullyQualifiedName());
+					return true;
+				}
+				
+				public boolean visit(FieldDeclaration node) {
+					System.out.println("FieldDeclaration: " + node.getType().toString());
+					return true;
+				}
+				
+				/*
+				public boolean visit(SimpleType node) {
+					System.out.println("SimpleType: " + node.getName().getFullyQualifiedName());
+					return true;
+				}
+				*/
+				/*
 				public boolean visit(VariableDeclarationFragment node) {
-					SimpleName name = node.getName();
-					this.names.add(name.getIdentifier());
-					int lineNumber = cu.getLineNumber(name.getStartPosition());
-					
-					System.out.println("Name: " + name.toString());
-					System.out.println("Line: " + lineNumber);
-					System.out.println("---------------------------------------");
-					
+					SimpleName name = node.getName();		// get the simple name
+					this.names.add(name.getIdentifier());		// add to names list
+					countMap.put(name.getIdentifier(), new Integer(1));		// create new hashmap entry for new variable declaration
+					int lineNumber = cu.getLineNumber(name.getStartPosition());		
+					debug("Name: \'" + name.toString() + "\' at line: " + lineNumber);
 					return false;
 				}
+				*/
 			});
-			
-			
 		}
+		// output answer in proper format
+		Integer f = countMap.get(typeToScan);
+		
 	}
 }
