@@ -1,6 +1,7 @@
 /**
  * JUnit test for Scanner.java.
  * Known bugs: tests involving System.exit() throw ExitSecurityExceptions
+ * Path names, java file names and expected counts (ref and dec) should be changed depending on the machine.
  * 
  * @author Jessica Pelley, Katie Tieu, and Nathanael Carrigan
  */
@@ -56,10 +57,6 @@ public class MainTest {
 			assertEquals("Usage:	java Scanner <path to directory> <java type of interest>\r\n" + "",
 					outContent.toString());
 		}
-		
-		
-		// TODO: Still throws ExitSecurityException?
-
 	}
 	
 	
